@@ -19,9 +19,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install deps
-        run: |
-          pip install requests beautifulsoup4 feedparser lxml playwright psycopg2-binary python-dotenv
-          playwright install chromium --with-deps
+        run: pip install requests beautifulsoup4 feedparser lxml psycopg2-binary python-dotenv
 
       - name: Run scraper
         env:
