@@ -26,7 +26,12 @@ def scrape_lablab():
             r = requests.get(url, headers=HEADERS, timeout=15)
             r.raise_for_status()
             items = _extract_items(r.text)
-            if not items: break
+            if not items:
+                if page == 1:
+                    has_jsonld = "application/ld+json" in r.text
+                    print(f"[lablab.ai] page 1: HTTP {r.status_code}, {len(r.text)} bytes, "
+                          f"ld+json block present={has_jsonld}, final_url={r.url}")
+                break
             new_on_page = 0
             for item in items:
                 full_url = item.get("url", "")
