@@ -39,6 +39,14 @@ def scrape_lablab():
             items, jsonld_end = _extract_items(r.text)
             if not items:
                 break
+            if page == 1 and items:
+                dbg_title = items[0].get("name", "")
+                dbg_href = items[0].get("url", "").replace("https://lablab.ai", "")
+                print(f"[lablab.ai] DEBUG item0='{dbg_title}' href='{dbg_href}' jsonld_end={jsonld_end}")
+                positions = [i for i in range(len(r.text)) if r.text.startswith(dbg_href, i)]
+                print(f"[lablab.ai] DEBUG all occurrences of href at positions: {positions}")
+                for p in positions:
+                    print(f"[lablab.ai] DEBUG window @ {p}: ...{r.text[max(0,p-300):p+300]}...")
             new_on_page = 0
             for item in items:
                 full_url = item.get("url", "")
