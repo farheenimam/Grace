@@ -4,8 +4,7 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
 }
 JSONLD_RE = re.compile(r'<script type="application/ld\+json">(.*?)</script>', re.S)
-CARD_ANCHOR_RE = re.compile(r'<a class="flex h-full flex-col justify-between" href="(/ai-hackathons/[^"]+)"')
-ENDED_MARKERS = ("finished", "ended")
+TITLE_RE = re.compile(r'<title>(.*?)</title>', re.S | re.I)
 
 def _extract_items(html):
     for m in JSONLD_RE.finditer(html):
@@ -16,16 +15,22 @@ def _extract_items(html):
         nodes = data.get("@graph", [data]) if isinstance(data, dict) else data
         for node in nodes:
             if isinstance(node, dict) and node.get("@type") == "ItemList":
-                return node.get("itemListElement", []), m.end()
-    return [], 0
+                return node.get("itemListElement", [])
+    return []
 
-def _card_chunks(html, search_from):
-    matches = [m for m in CARD_ANCHOR_RE.finditer(html) if m.start() >= search_from]
-    chunks = {}
-    for i, m in enumerate(matches):
-        end = matches[i + 1].start() if i + 1 < len(matches) else len(html)
-        chunks.setdefault(m.group(1), html[m.start():end])
-    return chunks
+def _has_ended(url, debug_label=None):
+    try:
+        r = requests.get(url, headers=HEADERS, timeout=10)
+        r.raise_for_status()
+        m = TITLE_RE.search(r.text)
+        page_title = m.group(1) if m else "(no <title> found)"
+        if debug_label:
+            print(f"[lablab.ai] DEBUG '{debug_label}' page title: {page_title!r}")
+        return bool(m and "[recap]" in m.group(1).lower())
+    except Exception as e:
+        if debug_label:
+            print(f"[lablab.ai] DEBUG '{debug_label}' fetch failed: {e}")
+        return False
 
 def scrape_lablab():
     hackathons = []
@@ -36,21 +41,19 @@ def scrape_lablab():
         try:
             r = requests.get(url, headers=HEADERS, timeout=15)
             r.raise_for_status()
-            items, jsonld_end = _extract_items(r.text)
+            items = _extract_items(r.text)
             if not items:
                 break
-            chunks = _card_chunks(r.text, jsonld_end)
             new_on_page = 0
-            for item in items:
+            for idx, item in enumerate(items):
                 full_url = item.get("url", "")
                 title = item.get("name", "")
                 if not full_url or not title or full_url in seen:
                     continue
                 seen.add(full_url)
                 new_on_page += 1
-                href = full_url.replace("https://lablab.ai", "")
-                chunk = chunks.get(href, "").lower()
-                if chunk and any(marker in chunk for marker in ENDED_MARKERS):
+                debug_label = title if (page == 1 and idx < 3) else None
+                if _has_ended(full_url, debug_label):
                     excluded.append(title)
                     continue
                 hackathons.append({"source":"lablab.ai","title":title,"url":full_url,"deadline":"TBD","prize":"See event page","thumbnail":"","description":"AI hackathon on lablab.ai","status":"open"})
