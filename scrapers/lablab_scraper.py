@@ -4,6 +4,7 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
 }
 JSONLD_RE = re.compile(r'<script type="application/ld\+json">(.*?)</script>', re.S)
+CARD_ANCHOR_RE = re.compile(r'<a class="flex h-full flex-col justify-between" href="(/ai-hackathons/[^"]+)"')
 ENDED_MARKERS = ("finished", "ended")
 
 def _extract_items(html):
@@ -18,14 +19,13 @@ def _extract_items(html):
                 return node.get("itemListElement", []), m.end()
     return [], 0
 
-def _is_ended(html, href, search_from):
-    idx = html.find(href, search_from)
-    if idx == -1:
-        idx = html.find(href)
-    if idx == -1:
-        return False
-    window = html[max(0, idx - 500):idx + 500].lower()
-    return any(marker in window for marker in ENDED_MARKERS)
+def _card_chunks(html, search_from):
+    matches = [m for m in CARD_ANCHOR_RE.finditer(html) if m.start() >= search_from]
+    chunks = {}
+    for i, m in enumerate(matches):
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(html)
+        chunks.setdefault(m.group(1), html[m.start():end])
+    return chunks
 
 def scrape_lablab():
     hackathons = []
@@ -39,14 +39,7 @@ def scrape_lablab():
             items, jsonld_end = _extract_items(r.text)
             if not items:
                 break
-            if page == 1 and items:
-                dbg_title = items[0].get("name", "")
-                dbg_href = items[0].get("url", "").replace("https://lablab.ai", "")
-                print(f"[lablab.ai] DEBUG item0='{dbg_title}' href='{dbg_href}' jsonld_end={jsonld_end}")
-                positions = [i for i in range(len(r.text)) if r.text.startswith(dbg_href, i)]
-                print(f"[lablab.ai] DEBUG all occurrences of href at positions: {positions}")
-                for p in positions:
-                    print(f"[lablab.ai] DEBUG window @ {p}: ...{r.text[max(0,p-300):p+300]}...")
+            chunks = _card_chunks(r.text, jsonld_end)
             new_on_page = 0
             for item in items:
                 full_url = item.get("url", "")
@@ -56,7 +49,8 @@ def scrape_lablab():
                 seen.add(full_url)
                 new_on_page += 1
                 href = full_url.replace("https://lablab.ai", "")
-                if _is_ended(r.text, href, jsonld_end):
+                chunk = chunks.get(href, "").lower()
+                if chunk and any(marker in chunk for marker in ENDED_MARKERS):
                     excluded.append(title)
                     continue
                 hackathons.append({"source":"lablab.ai","title":title,"url":full_url,"deadline":"TBD","prize":"See event page","thumbnail":"","description":"AI hackathon on lablab.ai","status":"open"})
