@@ -1,4 +1,4 @@
-const CACHE = 'hacktracker-v2';
+const CACHE = 'hacktracker-v3';
 const STATIC = ['./', './index.html', './css/app.css', './js/app.js', './manifest.json'];
 
 self.addEventListener('install', e => {
