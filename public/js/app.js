@@ -8,7 +8,7 @@ const SUPABASE_HEADERS = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABA
 const SOURCE_COLORS = {
   'devpost':'#6EE7B7','dev.to':'#A78BFA','lablab.ai':'#60A5FA',
   'mlh':'#F472B6','hackerearth':'#FBBF24','dorahacks':'#FB923C',
-  'google developers':'#FB923C',
+  'google developers':'#FB923C','kaggle':'#67E8F9',
 };
 
 function getColor(source) {
@@ -42,7 +42,7 @@ let state = {
   search: '',
   toggles: JSON.parse(localStorage.getItem('ht_toggles')||'null') || {
     'lablab.ai':true,'Devpost':true,'dev.to':true,
-    'MLH':true,'HackerEarth':true,'DoraHacks':true,'Google Developers':true
+    'MLH':true,'HackerEarth':true,'DoraHacks':true,'Google Developers':true,'Kaggle':true
   },
 };
 
@@ -233,6 +233,7 @@ function renderSidebarFilters() {
     {label:'HackerEarth',val:'he',color:'#FBBF24'},
     {label:'DoraHacks',val:'dora',color:'#FB923C'},
     {label:'Google Dev',val:'google',color:'#FB923C'},
+    {label:'Kaggle',val:'kaggle',color:'#67E8F9'},
   ];
   const counts = {};
   state.hackathons.forEach(h => {
@@ -255,7 +256,7 @@ function renderSettings() {
     {label:'lablab.ai',color:'#60A5FA'},{label:'Devpost',color:'#6EE7B7'},
     {label:'dev.to',color:'#A78BFA'},{label:'MLH',color:'#F472B6'},
     {label:'HackerEarth',color:'#FBBF24'},{label:'DoraHacks',color:'#FB923C'},
-    {label:'Google Developers',color:'#FB923C'},
+    {label:'Google Developers',color:'#FB923C'},{label:'Kaggle',color:'#67E8F9'},
   ];
   document.getElementById('sourceToggles').innerHTML = SRCS.map((s,i)=>`
     <div class="toggle-row">

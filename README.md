@@ -10,7 +10,7 @@ A full-stack hackathon aggregator PWA. Scrapes multiple hackathon platforms, sto
 ## Features
 
 **Aggregation**
-- Pulls hackathons from 7 platforms: Devpost, dev.to, lablab.ai, MLH, HackerEarth, DoraHacks, Google Developers
+- Pulls hackathons from 8 platforms: Devpost, dev.to, lablab.ai, MLH, HackerEarth, DoraHacks, Google Developers, Kaggle
 - Matches against 100+ keywords beyond "hackathon" — catches non-standard names like game jams, GSoC, build challenges, Imagine Cup, Code Jam
 - URL-hash deduplication — no repeat entries across scraper runs
 - Automated scraping every 4 hours via GitHub Actions cron

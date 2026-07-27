@@ -15,6 +15,7 @@ from scrapers.mlh_scraper import scrape_mlh
 from scrapers.hackerearth_scraper import scrape_hackerearth
 from scrapers.dorahacks_scraper import scrape_dorahacks
 from scrapers.google_dev_scraper import scrape_google_dev_events
+from scrapers.kaggle_scraper import scrape_kaggle
 from notifier import send_email_notification, send_push_notification
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
@@ -27,6 +28,7 @@ SCRAPERS = [
     ("HackerEarth",   scrape_hackerearth),
     ("DoraHacks",     scrape_dorahacks),
     ("Google Dev",    scrape_google_dev_events),
+    ("Kaggle",        scrape_kaggle),
 ]
 
 def make_id(h):
