@@ -32,6 +32,22 @@ def scrape_lablab():
                     print(f"[lablab.ai] page 1: HTTP {r.status_code}, {len(r.text)} bytes, "
                           f"ld+json block present={has_jsonld}, final_url={r.url}")
                 break
+            if page == 1:
+                # TEMP DEBUG: dump raw context around the first item's title so we can
+                # see what "ended" markers actually look like in the live markup.
+                first_title = items[0].get("name", "")
+                idx = r.text.find(first_title) if first_title else -1
+                if idx != -1:
+                    snippet = r.text[max(0, idx - 400):idx + 400]
+                    print(f"[lablab.ai] DEBUG context around '{first_title}':\n{snippet}")
+                for marker in ("Finished", "finished", "Ended", "ended", "This Event Has"):
+                    midx = r.text.find(marker)
+                    if midx != -1:
+                        print(f"[lablab.ai] DEBUG found marker '{marker}' at {midx}: "
+                              f"...{r.text[max(0, midx-150):midx+150]}...")
+                        break
+                else:
+                    print("[lablab.ai] DEBUG: no ended/finished marker text found anywhere on listing page")
             new_on_page = 0
             for item in items:
                 full_url = item.get("url", "")
