@@ -24,9 +24,12 @@ def _has_ended(url, debug_label=None):
         r.raise_for_status()
         m = TITLE_RE.search(r.text)
         page_title = m.group(1) if m else "(no <title> found)"
+        title_says_ended = bool(m and "[recap]" in m.group(1).lower())
+        banner_says_ended = "this event has finished" in r.text.lower()
         if debug_label:
-            print(f"[lablab.ai] DEBUG '{debug_label}' page title: {page_title!r}")
-        return bool(m and "[recap]" in m.group(1).lower())
+            print(f"[lablab.ai] DEBUG '{debug_label}' title={page_title!r} "
+                  f"title_ended={title_says_ended} banner_ended={banner_says_ended}")
+        return title_says_ended or banner_says_ended
     except Exception as e:
         if debug_label:
             print(f"[lablab.ai] DEBUG '{debug_label}' fetch failed: {e}")
