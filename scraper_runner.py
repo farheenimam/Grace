@@ -1,9 +1,10 @@
 """
 HackTracker — GitHub Actions scraper runner
-Runs all 7 scrapers, saves new hackathons to Supabase, sends notifications.
+Runs all scrapers, saves/refreshes hackathons in Supabase, purges ended
+ones, and sends notifications for newly discovered hackathons.
 """
 import os, sys, hashlib
-from datetime import datetime
+from datetime import datetime, timedelta
 import psycopg2, psycopg2.extras
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -55,20 +56,55 @@ def get_existing_ids():
     ids = {r[0] for r in c.fetchall()}
     conn.close(); return ids
 
-def save_new(hackathons):
+def save_all(hackathons):
+    """Insert new hackathons, and refresh deadline/status/etc. on ones we've already seen."""
     if not hackathons: return
     conn = get_conn(); c = conn.cursor()
     for h in hackathons:
         try:
             c.execute("""INSERT INTO hackathons
                 (id,source,title,url,deadline,prize,thumbnail,description,status)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (id) DO NOTHING""",
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (id) DO UPDATE SET
+                    title=EXCLUDED.title, deadline=EXCLUDED.deadline,
+                    prize=EXCLUDED.prize, thumbnail=EXCLUDED.thumbnail,
+                    description=EXCLUDED.description, status=EXCLUDED.status""",
                 (make_id(h), h.get("source",""), h.get("title",""), h.get("url",""),
                  h.get("deadline","TBD"), h.get("prize","N/A"), h.get("thumbnail",""),
                  h.get("description",""), h.get("status","open")))
         except Exception as e:
             print(f"  Insert error: {e}")
     conn.commit(); conn.close()
+
+DEADLINE_FORMATS = ["%Y-%m-%d", "%B %d, %Y", "%B %Y"]
+
+def parse_deadline(deadline):
+    if not deadline or deadline.strip().upper() in ("TBD", "N/A"):
+        return None
+    for fmt in DEADLINE_FORMATS:
+        try:
+            return datetime.strptime(deadline.strip(), fmt)
+        except ValueError:
+            continue
+    return None
+
+def purge_ended(grace_days=1):
+    """Delete rows whose deadline is a real, parseable date more than
+    grace_days in the past. Unparseable deadlines (TBD, etc.) are left alone."""
+    conn = get_conn(); c = conn.cursor()
+    c.execute("SELECT id, deadline FROM hackathons")
+    rows = c.fetchall()
+    cutoff = datetime.now() - timedelta(days=grace_days)
+    to_delete = []
+    for rid, deadline in rows:
+        dt = parse_deadline(deadline)
+        if dt and dt < cutoff:
+            to_delete.append(rid)
+    if to_delete:
+        c.execute("DELETE FROM hackathons WHERE id = ANY(%s)", (to_delete,))
+        conn.commit()
+    conn.close()
+    return len(to_delete)
 
 def get_subscribers():
     conn = get_conn()
@@ -105,8 +141,12 @@ def main():
     new = [h for h in all_results if make_id(h) not in existing]
     print(f"[New]   {len(new)} unseen hackathons")
 
+    save_all(all_results)  # inserts new rows, refreshes deadline/status on existing ones
+
+    purged = purge_ended()
+    print(f"[Purge] Removed {purged} ended hackathon(s)")
+
     if new:
-        save_new(new)
         subs = get_subscribers()
         emails = [s["email"] for s in subs if s.get("email")]
         tokens = [s["fcm_token"] for s in subs if s.get("fcm_token")]
