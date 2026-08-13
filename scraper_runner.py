@@ -110,19 +110,35 @@ def purge_ended(grace_days=3):
     grace_days is intentionally generous to absorb scraper date ambiguity
     (e.g. a single date that's actually the open date, not the deadline)."""
     conn = get_conn(); c = conn.cursor()
-    c.execute("SELECT id, deadline FROM hackathons")
+    c.execute("SELECT id, source, title, url, deadline FROM hackathons")
     rows = c.fetchall()
     cutoff = datetime.now() - timedelta(days=grace_days)
     to_delete = []
-    for rid, deadline in rows:
+    for rid, source, title, url, deadline in rows:
         dt = parse_deadline(deadline)
         if dt and dt < cutoff:
             to_delete.append(rid)
+            print(f"[Purge] {source} | {title} | deadline={deadline} | {url}")
     if to_delete:
         c.execute("DELETE FROM hackathons WHERE id = ANY(%s)", (to_delete,))
         conn.commit()
     conn.close()
     return len(to_delete)
+
+def dedupe_by_url():
+    """One-off cleanup: if a source changed its URL scheme (e.g. DoraHacks
+    switching to uname-based URLs), old rows for the same hackathon can end
+    up orphaned under a stale id/url and never get refreshed by ON CONFLICT.
+    This keeps only the most recently first_seen row per (source, title)."""
+    conn = get_conn(); c = conn.cursor()
+    c.execute("""
+        DELETE FROM hackathons a USING hackathons b
+        WHERE a.source = b.source AND a.title = b.title
+          AND a.id <> b.id AND a.first_seen < b.first_seen
+    """)
+    removed = c.rowcount
+    conn.commit(); conn.close()
+    return removed
 
 def get_subscribers():
     conn = get_conn()
@@ -160,6 +176,10 @@ def main():
     print(f"[New]   {len(new)} unseen hackathons")
 
     save_all(all_results)  # inserts new rows, refreshes deadline/status on existing ones
+
+    deduped = dedupe_by_url()
+    if deduped:
+        print(f"[Dedupe] Removed {deduped} orphaned duplicate(s) from URL-scheme changes")
 
     purged = purge_ended()
     print(f"[Purge] Removed {purged} ended hackathon(s)")
