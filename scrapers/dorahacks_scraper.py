@@ -3,21 +3,25 @@ import time
 from datetime import datetime, timezone
 
 
-API_URL = "https://dorahacks.io/hub/hackathons"
+API_URL = "https://dorahacks.io/api/v1/hub/hackathons"
 
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/125.0.0.0 Safari/537.36"
+        "Chrome/151.0.0.0 Safari/537.36"
     ),
-    "Accept": "application/json",
+    "Accept": "*/*",
+    "Accept-Language": "en-GB,en-US;q=0.9,en;q=0.8",
+    "Content-Language": "en-US",
     "Referer": "https://dorahacks.io/hackathon",
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "same-origin",
 }
 
 
 def unix_to_date(timestamp):
-    """Convert Unix timestamp to YYYY-MM-DD."""
     if not timestamp:
         return "TBD"
 
@@ -40,6 +44,7 @@ def scrape_dorahacks():
     now = datetime.now(timezone.utc).timestamp()
 
     while True:
+
         params = {
             "page": page,
             "page_size": page_size,
@@ -53,16 +58,27 @@ def scrape_dorahacks():
                 timeout=20,
             )
 
+            print(
+                f"[DoraHacks] page={page} "
+                f"status={response.status_code}"
+            )
+
             response.raise_for_status()
 
             data = response.json()
 
         except requests.RequestException as e:
-            print(f"[DoraHacks] page {page}: request failed: {e}")
+            print(
+                f"[DoraHacks] page {page}: "
+                f"request failed: {e}"
+            )
             break
 
         except ValueError as e:
-            print(f"[DoraHacks] page {page}: invalid JSON: {e}")
+            print(
+                f"[DoraHacks] page {page}: "
+                f"invalid JSON: {e}"
+            )
             break
 
         results = data.get("results", [])
@@ -85,15 +101,16 @@ def scrape_dorahacks():
             start = h.get("timeline_start")
             end = h.get("timeline_end")
 
-            # No end date = don't risk showing an event
-            # that may already be finished.
+            # No end date -> skip because we cannot safely
+            # determine whether the hackathon is still active.
             if not end:
                 continue
 
-            # Only keep currently running or upcoming hackathons.
+            # Remove already-ended hackathons.
             if end < now:
                 continue
 
+            # Determine whether it is upcoming or currently running.
             if start and start > now:
                 status = "upcoming"
             else:
@@ -125,7 +142,10 @@ def scrape_dorahacks():
             bonus_token = h.get("bonus_token")
 
             if bonus_price:
-                prize = f"{bonus_price} {bonus_token or ''}".strip()
+                prize = (
+                    f"{bonus_price} "
+                    f"{bonus_token or ''}"
+                ).strip()
             else:
                 prize = "See event page"
 
@@ -147,21 +167,19 @@ def scrape_dorahacks():
 
         print(
             f"[DoraHacks] page {page}: "
-            f"{len(results)} results, "
-            f"{len(hackathons)} active/upcoming total"
+            f"{len(results)} received, "
+            f"{len(hackathons)} active/upcoming"
         )
 
-        # DoraHacks tells us the next page directly.
-        next_url = data.get("next")
-
-        if not next_url:
+        # The API gives us the next URL.
+        if not data.get("next"):
             break
 
         page += 1
 
         time.sleep(0.3)
 
-    # Sort by deadline so the soonest-ending hackathons appear first.
+    # Soonest deadline first.
     hackathons.sort(
         key=lambda h: (
             h["deadline"] == "TBD",
