@@ -76,21 +76,39 @@ def save_all(hackathons):
             print(f"  Insert error: {e}")
     conn.commit(); conn.close()
 
-DEADLINE_FORMATS = ["%Y-%m-%d", "%B %d, %Y", "%B %Y"]
+import calendar
+
+# Formats with a real day component. "%B %Y" / "%b %Y" (month+year only) are
+# handled separately below because strptime defaults the day to 1, which
+# makes any hackathon ending later in the current month look already-ended.
+DEADLINE_FORMATS = ["%Y-%m-%d", "%B %d, %Y", "%b %d, %Y", "%d %B %Y", "%d %b %Y"]
+MONTH_ONLY_FORMATS = ["%B %Y", "%b %Y"]
 
 def parse_deadline(deadline):
     if not deadline or deadline.strip().upper() in ("TBD", "N/A"):
         return None
+    deadline = deadline.strip()
     for fmt in DEADLINE_FORMATS:
         try:
-            return datetime.strptime(deadline.strip(), fmt)
+            return datetime.strptime(deadline, fmt)
+        except ValueError:
+            continue
+    # Month+year only ("August 2026") -> treat deadline as end of that month,
+    # not the 1st, so hackathons closing later in the month aren't purged early.
+    for fmt in MONTH_ONLY_FORMATS:
+        try:
+            dt = datetime.strptime(deadline, fmt)
+            last_day = calendar.monthrange(dt.year, dt.month)[1]
+            return dt.replace(day=last_day)
         except ValueError:
             continue
     return None
 
-def purge_ended(grace_days=1):
+def purge_ended(grace_days=3):
     """Delete rows whose deadline is a real, parseable date more than
-    grace_days in the past. Unparseable deadlines (TBD, etc.) are left alone."""
+    grace_days in the past. Unparseable deadlines (TBD, etc.) are left alone.
+    grace_days is intentionally generous to absorb scraper date ambiguity
+    (e.g. a single date that's actually the open date, not the deadline)."""
     conn = get_conn(); c = conn.cursor()
     c.execute("SELECT id, deadline FROM hackathons")
     rows = c.fetchall()
