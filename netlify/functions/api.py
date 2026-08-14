@@ -173,15 +173,10 @@ def normalize_source(source):
     aliases = {
         "devpost": "Devpost",
 
-        "dev.to": "dev.to",
-        "devto": "dev.to",
-
         "lablab.ai": "lablab.ai",
         "lablab": "lablab.ai",
 
         "mlh": "MLH",
-
-        "hackerearth": "HackerEarth",
 
         "dorahacks": "DoraHacks",
         "dora hacks": "DoraHacks",
@@ -405,10 +400,8 @@ def handle_sources():
     return respond({
         "sources": [
             "Devpost",
-            "dev.to",
             "lablab.ai",
             "MLH",
-            "HackerEarth",
             "DoraHacks",
             "Google Dev",
             "Kaggle"
