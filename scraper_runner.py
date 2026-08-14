@@ -441,7 +441,7 @@ def purge_ended(
 
         current_ids_by_source[
             normalized_source
-        ] = {print(     f"  ✓ {len(results)} items" )
+        ] = {print(f"  ✓ {len(results)} items" )
             make_id(h)
             for h in results
             if h.get("url")
