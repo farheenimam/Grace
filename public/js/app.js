@@ -85,7 +85,7 @@ async function fetchHackathons() {
     const params = new URLSearchParams({
       select: 'source,title,url,deadline,prize,thumbnail,description,status,first_seen',
       order: 'first_seen.desc',
-      limit: '200',
+      limit: '2000',
     });
     const res = await fetch(`${SUPABASE_URL}/rest/v1/hackathons?${params}`, {
       headers: SUPABASE_HEADERS, signal: AbortSignal.timeout(8000)
