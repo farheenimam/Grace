@@ -258,29 +258,93 @@ function renderStatsBar() {
 }
 
 function renderSidebarFilters() {
+
   const FILTERS = [
-    {label:'All',val:'all',color:'#6EE7B7'},
-    {label:'lablab.ai',val:'lablab',color:'#60A5FA'},
-    {label:'Devpost',val:'devpost',color:'#6EE7B7'},
-    {label:'MLH',val:'mlh',color:'#F472B6'},
-    {label:'DoraHacks',val:'dora',color:'#FB923C'},
-    {label:'Google Dev',val:'google',color:'#FB923C'},
-    {label:'Kaggle',val:'kaggle',color:'#67E8F9'},
+    {
+      label: 'All',
+      val: 'all',
+      source: null,
+      color: '#6EE7B7'
+    },
+    {
+      label: 'lablab.ai',
+      val: 'lablab',
+      source: 'lablab.ai',
+      color: '#60A5FA'
+    },
+    {
+      label: 'Devpost',
+      val: 'devpost',
+      source: 'Devpost',
+      color: '#6EE7B7'
+    },
+    {
+      label: 'MLH',
+      val: 'mlh',
+      source: 'MLH',
+      color: '#F472B6'
+    },
+    {
+      label: 'DoraHacks',
+      val: 'dora',
+      source: 'DoraHacks',
+      color: '#FB923C'
+    },
+    {
+      label: 'Google Dev',
+      val: 'google',
+      source: 'Google Dev',
+      color: '#FB923C'
+    },
+    {
+      label: 'Kaggle',
+      val: 'kaggle',
+      source: 'Kaggle',
+      color: '#67E8F9'
+    },
   ];
-  const counts = {};
-  state.hackathons.forEach(h => {
-    const src = (h.source||'').toLowerCase();
-    FILTERS.forEach(f => {
-      if (f.val!=='all' && (src.includes(f.val.slice(0,4))||f.val.includes(src.slice(0,4)))) counts[f.val]=(counts[f.val]||0)+1;
-    });
-    counts.all = (counts.all||0)+1;
+
+  const counts = {
+    all: state.hackathons.length
+  };
+
+  FILTERS.forEach(f => {
+    if (f.val !== 'all') {
+      counts[f.val] =
+        state.hackathons.filter(
+          h => h.source === f.source
+        ).length;
+    }
   });
-  document.getElementById('sidebarFilters').innerHTML = FILTERS.map(f=>`
-    <div class="filter-item${state.activeFilter===f.val?' active':''}" onclick="setFilter('${f.val}')"
-      style="${state.activeFilter===f.val?`color:${f.color}`:''}">
-      <div class="filter-dot" style="background:${f.color}"></div>
-      ${f.label}<span class="filter-count">${counts[f.val]||0}</span>
-    </div>`).join('');
+
+  document.getElementById(
+    'sidebarFilters'
+  ).innerHTML = FILTERS.map(f => `
+
+    <div
+      class="filter-item${state.activeFilter === f.val ? ' active' : ''}"
+      onclick="setFilter('${f.val}')"
+      style="${
+        state.activeFilter === f.val
+          ? `color:${f.color}`
+          : ''
+      }"
+    >
+
+      <div
+        class="filter-dot"
+        style="background:${f.color}"
+      ></div>
+
+      ${f.label}
+
+      <span class="filter-count">
+        ${counts[f.val] || 0}
+      </span>
+
+    </div>
+
+  `).join('');
 }
 
 function renderSettings() {
