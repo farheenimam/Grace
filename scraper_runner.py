@@ -1,14 +1,29 @@
 """
 HackTracker — GitHub Actions scraper runner
-Runs all scrapers, saves/refreshes hackathons in Supabase, purges ended
-ones, and sends notifications for newly discovered hackathons.
+
+Runs all scrapers, saves/refreshes hackathons in Supabase,
+purges ended/stale hackathons according to each individual
+scraper's source rules, and sends notifications for newly
+discovered hackathons.
 """
 
-import os, sys, hashlib
+import os
+import sys
+import hashlib
+import calendar
+
 from datetime import datetime, timedelta
-import psycopg2, psycopg2.extras
+
+import psycopg2
+import psycopg2.extras
+
 
 sys.path.insert(0, os.path.dirname(__file__))
+
+
+# ============================================================
+# SCRAPERS
+# ============================================================
 
 from scrapers.devpost_scraper import scrape_devpost
 from scrapers.devto_scraper import scrape_devto
@@ -18,29 +33,51 @@ from scrapers.hackerearth_scraper import scrape_hackerearth
 from scrapers.dorahacks_scraper import scrape_dorahacks
 from scrapers.google_dev_scraper import scrape_google_dev_events
 from scrapers.kaggle_scraper import scrape_kaggle
-from notifier import send_email_notification, send_push_notification
 
+from notifier import (
+    send_email_notification,
+    send_push_notification,
+)
+
+
+# ============================================================
+# CONFIGURATION
+# ============================================================
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
 
 SCRAPERS = [
-    ("Devpost",       scrape_devpost),
-    ("dev.to",        scrape_devto),
-    ("lablab.ai",     scrape_lablab),
-    ("MLH",           scrape_mlh),
-    ("HackerEarth",   scrape_hackerearth),
-    ("DoraHacks",     scrape_dorahacks),
-    ("Google Dev",    scrape_google_dev_events),
-    ("Kaggle",        scrape_kaggle),
+    ("Devpost", scrape_devpost),
+    ("dev.to", scrape_devto),
+    ("lablab.ai", scrape_lablab),
+    ("MLH", scrape_mlh),
+    ("HackerEarth", scrape_hackerearth),
+    ("DoraHacks", scrape_dorahacks),
+    ("Google Dev", scrape_google_dev_events),
+    ("Kaggle", scrape_kaggle),
 ]
 
 
+# ============================================================
+# ID
+# ============================================================
+
 def make_id(h):
+    """
+    Generate a stable ID from the URL.
+
+    Falls back to title if URL is unavailable.
+    """
+
     return hashlib.md5(
         (h.get("url") or h.get("title", "")).encode()
     ).hexdigest()
 
+
+# ============================================================
+# DATABASE
+# ============================================================
 
 def get_conn():
     return psycopg2.connect(
@@ -50,6 +87,7 @@ def get_conn():
 
 
 def ensure_tables():
+
     conn = get_conn()
     c = conn.cursor()
 
@@ -83,10 +121,13 @@ def ensure_tables():
 
 
 def get_existing_ids():
+
     conn = get_conn()
     c = conn.cursor()
 
-    c.execute("SELECT id FROM hackathons")
+    c.execute(
+        "SELECT id FROM hackathons"
+    )
 
     ids = {
         r[0]
@@ -98,12 +139,15 @@ def get_existing_ids():
     return ids
 
 
+# ============================================================
+# SAVE / UPDATE
+# ============================================================
+
 def save_all(hackathons):
     """
     Insert new hackathons and refresh existing ones.
 
-    Each scraper's status is preserved. The runner does not replace
-    a scraper's status with a generic deadline-based status.
+    Existing records are updated using the stable ID.
     """
 
     if not hackathons:
@@ -116,7 +160,8 @@ def save_all(hackathons):
 
         try:
 
-            c.execute("""
+            c.execute(
+                """
                 INSERT INTO hackathons
                 (
                     id,
@@ -131,31 +176,40 @@ def save_all(hackathons):
                 )
                 VALUES
                 (
-                    %s,%s,%s,%s,%s,%s,%s,%s,%s
+                    %s,
+                    %s,
+                    %s,
+                    %s,
+                    %s,
+                    %s,
+                    %s,
+                    %s,
+                    %s
                 )
 
-                ON CONFLICT (id) DO UPDATE SET
+                ON CONFLICT (id)
+                DO UPDATE SET
 
-                    title = EXCLUDED.title,
                     source = EXCLUDED.source,
+                    title = EXCLUDED.title,
                     deadline = EXCLUDED.deadline,
                     prize = EXCLUDED.prize,
                     thumbnail = EXCLUDED.thumbnail,
                     description = EXCLUDED.description,
                     status = EXCLUDED.status
-            """,
-
-            (
-                make_id(h),
-                h.get("source", ""),
-                h.get("title", ""),
-                h.get("url", ""),
-                h.get("deadline", "TBD"),
-                h.get("prize", "N/A"),
-                h.get("thumbnail", ""),
-                h.get("description", ""),
-                h.get("status", "open"),
-            ))
+                """,
+                (
+                    make_id(h),
+                    h.get("source", ""),
+                    h.get("title", ""),
+                    h.get("url", ""),
+                    h.get("deadline", "TBD"),
+                    h.get("prize", "N/A"),
+                    h.get("thumbnail", ""),
+                    h.get("description", ""),
+                    h.get("status", "open"),
+                )
+            )
 
         except Exception as e:
 
@@ -167,22 +221,24 @@ def save_all(hackathons):
     conn.close()
 
 
-import calendar
+# ============================================================
+# DEADLINE PARSING
+# ============================================================
 
-
-# Formats with a real day component.
+# Formats containing a real day.
 DEADLINE_FORMATS = [
     "%Y-%m-%d",
     "%B %d, %Y",
     "%b %d, %Y",
     "%d %B %Y",
-    "%d %b %Y"
+    "%d %b %Y",
 ]
 
 
+# Month + year only.
 MONTH_ONLY_FORMATS = [
     "%B %Y",
-    "%b %Y"
+    "%b %Y",
 ]
 
 
@@ -191,26 +247,37 @@ def parse_deadline(deadline):
     if not deadline:
         return None
 
-    if deadline.strip().upper() in (
+    deadline = str(deadline).strip()
+
+    if deadline.upper() in (
         "TBD",
-        "N/A"
+        "N/A",
+        "NONE",
+        "NULL",
     ):
         return None
 
-    deadline = deadline.strip()
+    # --------------------------------------------------------
+    # Full dates
+    # --------------------------------------------------------
 
     for fmt in DEADLINE_FORMATS:
 
         try:
+
             return datetime.strptime(
                 deadline,
                 fmt
             )
 
         except ValueError:
+
             continue
 
-    # Month + year only.
+    # --------------------------------------------------------
+    # Month + year
+    # --------------------------------------------------------
+
     for fmt in MONTH_ONLY_FORMATS:
 
         try:
@@ -230,37 +297,160 @@ def parse_deadline(deadline):
             )
 
         except ValueError:
+
             continue
 
     return None
 
 
-def purge_ended(grace_days=3):
+# ============================================================
+# SOURCE NORMALIZATION
+# ============================================================
+
+def normalize_source(source):
+
+    source = (
+        str(source or "")
+        .strip()
+        .lower()
+    )
+
+    aliases = {
+        "devpost": "devpost",
+
+        "dev.to": "dev.to",
+        "devto": "dev.to",
+
+        "lablab.ai": "lablab.ai",
+        "lablab": "lablab.ai",
+
+        "dorahacks": "dorahacks",
+        "dora hacks": "dorahacks",
+
+        "kaggle": "kaggle",
+
+        "mlh": "mlh",
+
+        "hackerearth": "hackerearth",
+
+        "google dev": "google dev",
+        "google developers": "google dev",
+    }
+
+    return aliases.get(
+        source,
+        source
+    )
+
+
+# ============================================================
+# PURGE
+# ============================================================
+
+def purge_ended(
+    grace_days=3,
+    successful_sources=None,
+    source_results=None
+):
     """
-    Purge hackathons according to the semantics of their individual source.
+    Purge hackathons according to the rules of their
+    individual scraper.
 
     IMPORTANT:
 
-    Devpost:
-        Trust Devpost's open/upcoming status.
+    A source is only purged if its scraper successfully
+    returned at least one result.
 
-    lablab.ai:
-        Trust lablab's open/upcoming status.
+    This prevents an API failure such as HTTP 403 from
+    deleting all existing records for that source.
 
-    DoraHacks:
-        Trust DoraHacks' open/upcoming status.
+    --------------------------------------------------------
+    Devpost
+    --------------------------------------------------------
 
-    Kaggle:
-        Kaggle currently returns status='open' for every competition,
-        so its actual deadline is used.
+    Devpost itself returns only open/upcoming hackathons.
 
-    dev.to:
-        Only a real extracted deadline is considered.
-        TBD is never purged.
+    Therefore:
 
-    Other sources:
-        Status is respected first, with the old deadline fallback.
+        returned by Devpost -> keep
+
+        no longer returned -> remove
+
+    --------------------------------------------------------
+    lablab.ai
+    --------------------------------------------------------
+
+    The lablab scraper itself checks the start/end dates.
+
+        returned by lablab -> keep
+
+        no longer returned -> remove
+
+    --------------------------------------------------------
+    DoraHacks
+    --------------------------------------------------------
+
+    The DoraHacks scraper itself checks timeline_end.
+
+        returned by DoraHacks -> keep
+
+        no longer returned -> remove
+
+    --------------------------------------------------------
+    Kaggle
+    --------------------------------------------------------
+
+    Uses the deadline returned by Kaggle.
+
+    --------------------------------------------------------
+    dev.to
+    --------------------------------------------------------
+
+    Uses its extracted deadline.
+
+    --------------------------------------------------------
+    Other sources
+    --------------------------------------------------------
+
+    Uses the generic deadline/status fallback.
     """
+
+    if successful_sources is None:
+        successful_sources = set()
+
+    if source_results is None:
+        source_results = {}
+
+    # Normalize successful source names.
+    successful_sources = {
+        normalize_source(source)
+        for source in successful_sources
+    }
+
+    # --------------------------------------------------------
+    # Build current IDs returned by each scraper.
+    # --------------------------------------------------------
+
+    current_ids_by_source = {}
+
+    for source, results in source_results.items():
+
+        normalized_source = normalize_source(
+            source
+        )
+
+        current_ids_by_source[
+            normalized_source
+        ] = {
+            make_id(h)
+            for h in results
+            if h.get("url")
+            or h.get("title")
+        }
+
+    # --------------------------------------------------------
+    # Database
+    # --------------------------------------------------------
 
     conn = get_conn()
     c = conn.cursor()
@@ -278,11 +468,16 @@ def purge_ended(grace_days=3):
 
     rows = c.fetchall()
 
-    cutoff = datetime.now() - timedelta(
-        days=grace_days
+    cutoff = (
+        datetime.now()
+        - timedelta(days=grace_days)
     )
 
     to_delete = []
+
+    # ========================================================
+    # PROCESS EACH DATABASE ROW
+    # ========================================================
 
     for (
         rid,
@@ -293,230 +488,229 @@ def purge_ended(grace_days=3):
         status
     ) in rows:
 
-        source_name = (
-            (source or "")
-            .strip()
-            .lower()
+        source_name = normalize_source(
+            source
         )
 
         current_status = (
-            (status or "")
+            str(status or "")
             .strip()
             .lower()
         )
 
-        # ==========================================================
+        # ====================================================
         # DEVPOST
-        # ==========================================================
-        #
-        # Devpost scraper explicitly requests:
-        #
-        #   status[]=open
-        #   status[]=upcoming
-        #
-        # and also performs a safety check against open/upcoming.
-        #
-        # Therefore DO NOT use the deadline to delete an item that
-        # Devpost itself says is open/upcoming.
-        #
+        # ====================================================
+
         if source_name == "devpost":
 
-            if current_status in (
-                "open",
-                "upcoming"
-            ):
+            # Never purge if Devpost scraper failed
+            # or returned zero results.
+
+            if "devpost" not in successful_sources:
+
                 continue
 
-            # Only fall back to deadline if the stored status is
-            # somehow not a recognized Devpost status.
-            dt = parse_deadline(deadline)
+            current_ids = current_ids_by_source.get(
+                "devpost",
+                set()
+            )
 
-            if dt and dt < cutoff:
+            # Devpost no longer returned this hackathon.
+            if rid not in current_ids:
 
                 to_delete.append(rid)
 
                 print(
-                    f"[Purge] {source} | {title} | "
-                    f"deadline={deadline} | "
-                    f"status={status} | {url}"
+                    "[Purge] Devpost no longer returned | "
+                    f"{title} | {url}"
                 )
 
             continue
 
-
-        # ==========================================================
+        # ====================================================
         # LABLAB.AI
-        # ==========================================================
-        #
-        # lablab scraper explicitly removes ended events and only
-        # returns:
-        #
-        #   open
-        #   upcoming
-        #
-        # Therefore trust its status.
-        #
-        if source_name in (
-            "lablab.ai",
-            "lablab"
-        ):
+        # ====================================================
 
-            if current_status in (
-                "open",
-                "upcoming"
-            ):
+        if source_name == "lablab.ai":
+
+            if "lablab.ai" not in successful_sources:
+
                 continue
 
-            dt = parse_deadline(deadline)
+            current_ids = current_ids_by_source.get(
+                "lablab.ai",
+                set()
+            )
 
-            if dt and dt < cutoff:
+            # Lablab scraper itself determines whether an
+            # event is live/upcoming.
+            #
+            # Therefore, if it successfully ran and did not
+            # return this event, remove the old record.
+
+            if rid not in current_ids:
 
                 to_delete.append(rid)
 
                 print(
-                    f"[Purge] {source} | {title} | "
-                    f"deadline={deadline} | "
-                    f"status={status} | {url}"
+                    "[Purge] lablab.ai no longer returned | "
+                    f"{title} | {url}"
                 )
 
             continue
 
-
-        # ==========================================================
+        # ====================================================
         # DORAHACKS
-        # ==========================================================
-        #
-        # DoraHacks explicitly checks timeline_end against now
-        # before returning the hackathon.
-        #
+        # ====================================================
+
         if source_name == "dorahacks":
 
-            if current_status in (
-                "open",
-                "upcoming"
-            ):
+            if "dorahacks" not in successful_sources:
+
                 continue
 
-            dt = parse_deadline(deadline)
+            current_ids = current_ids_by_source.get(
+                "dorahacks",
+                set()
+            )
 
-            if dt and dt < cutoff:
+            # DoraHacks scraper already checks timeline_end.
+            #
+            # If successfully scraped and no longer returned,
+            # remove the stale database record.
+
+            if rid not in current_ids:
 
                 to_delete.append(rid)
 
                 print(
-                    f"[Purge] {source} | {title} | "
-                    f"deadline={deadline} | "
-                    f"status={status} | {url}"
+                    "[Purge] DoraHacks no longer returned | "
+                    f"{title} | {url}"
                 )
 
             continue
 
-
-        # ==========================================================
+        # ====================================================
         # KAGGLE
-        # ==========================================================
-        #
-        # Kaggle scraper currently assigns status='open' to every
-        # competition, so status cannot tell us whether it ended.
-        #
-        # Kaggle's deadline field is an actual competition deadline,
-        # therefore use that.
-        #
+        # ====================================================
+
         if source_name == "kaggle":
 
-            dt = parse_deadline(deadline)
+            if "kaggle" not in successful_sources:
+
+                continue
+
+            dt = parse_deadline(
+                deadline
+            )
 
             if dt and dt < cutoff:
 
                 to_delete.append(rid)
 
                 print(
-                    f"[Purge] {source} | {title} | "
+                    "[Purge] Kaggle | "
+                    f"{title} | "
                     f"deadline={deadline} | "
-                    f"status={status} | {url}"
+                    f"status={status} | "
+                    f"{url}"
                 )
 
             continue
 
-
-        # ==========================================================
+        # ====================================================
         # DEV.TO
-        # ==========================================================
-        #
-        # dev.to article publication dates MUST NOT be used.
-        #
-        # The new dev.to scraper returns:
-        #
-        #   actual deadline -> YYYY-MM-DD
-        #
-        # or:
-        #
-        #   TBD
-        #
-        # TBD means we don't know the event deadline, so KEEP it.
-        #
+        # ====================================================
+
         if source_name == "dev.to":
 
-            if not deadline:
+            if "dev.to" not in successful_sources:
+
                 continue
 
-            if deadline.strip().upper() in (
+            # The dev.to scraper currently uses the article's
+            # published date as deadline.
+            #
+            # Do NOT purge TBD/N/A.
+
+            if not deadline:
+
+                continue
+
+            if str(deadline).strip().upper() in (
                 "TBD",
                 "N/A"
             ):
+
                 continue
 
-            dt = parse_deadline(deadline)
+            dt = parse_deadline(
+                deadline
+            )
 
             if dt and dt < cutoff:
 
                 to_delete.append(rid)
 
                 print(
-                    f"[Purge] {source} | {title} | "
+                    "[Purge] dev.to | "
+                    f"{title} | "
                     f"deadline={deadline} | "
-                    f"status={status} | {url}"
+                    f"status={status} | "
+                    f"{url}"
                 )
 
             continue
 
-
-        # ==========================================================
+        # ====================================================
         # ALL OTHER SOURCES
-        # ==========================================================
-        #
-        # If the scraper says open/upcoming, trust it.
-        #
+        # ====================================================
+
+        # Never purge a source whose scraper failed.
+
+        if source_name not in successful_sources:
+
+            continue
+
+        # Explicit active statuses are protected.
+
         if current_status in (
             "open",
             "upcoming",
             "active",
             "live"
         ):
+
             continue
 
-        # Otherwise use the old deadline fallback.
-        dt = parse_deadline(deadline)
+        dt = parse_deadline(
+            deadline
+        )
 
         if dt and dt < cutoff:
 
             to_delete.append(rid)
 
             print(
-                f"[Purge] {source} | {title} | "
+                f"[Purge] {source} | "
+                f"{title} | "
                 f"deadline={deadline} | "
-                f"status={status} | {url}"
+                f"status={status} | "
+                f"{url}"
             )
 
-
-    # ==============================================================
-    # DELETE ONLY THE VERIFIED EXPIRED ROWS
-    # ==============================================================
+    # ========================================================
+    # DELETE
+    # ========================================================
 
     if to_delete:
 
         c.execute(
-            "DELETE FROM hackathons WHERE id = ANY(%s)",
+            """
+            DELETE FROM hackathons
+            WHERE id = ANY(%s)
+            """,
             (to_delete,)
         )
 
@@ -527,15 +721,16 @@ def purge_ended(grace_days=3):
     return len(to_delete)
 
 
+# ============================================================
+# DEDUPLICATION
+# ============================================================
+
 def dedupe_by_url():
     """
-    One-off cleanup: if a source changed its URL scheme
-    (e.g. DoraHacks switching to uname-based URLs), old rows
-    for the same hackathon can end up orphaned under a stale
-    id/url and never get refreshed by ON CONFLICT.
+    Remove exact duplicate URLs only.
 
-    This keeps only the most recently first_seen row per
-    (source, title).
+    Do NOT deduplicate solely by title because two different
+    hackathons can legitimately have the same title.
     """
 
     conn = get_conn()
@@ -544,9 +739,7 @@ def dedupe_by_url():
     c.execute("""
         DELETE FROM hackathons a
         USING hackathons b
-
-        WHERE a.source = b.source
-          AND a.title = b.title
+        WHERE a.url = b.url
           AND a.id <> b.id
           AND a.first_seen < b.first_seen
     """)
@@ -558,6 +751,10 @@ def dedupe_by_url():
 
     return removed
 
+
+# ============================================================
+# SUBSCRIBERS
+# ============================================================
 
 def get_subscribers():
 
@@ -578,16 +775,28 @@ def get_subscribers():
     return rows
 
 
+# ============================================================
+# MAIN
+# ============================================================
+
 def main():
+
+    # ========================================================
+    # DATABASE URL
+    # ========================================================
 
     if not DATABASE_URL:
 
         print(
-            "ERROR: DATABASE_URL not set in GitHub Secrets."
+            "ERROR: DATABASE_URL not set "
+            "in GitHub Secrets."
         )
 
         sys.exit(1)
 
+    # ========================================================
+    # HEADER
+    # ========================================================
 
     print("=" * 55)
 
@@ -601,12 +810,40 @@ def main():
 
     print("=" * 55)
 
+    # ========================================================
+    # DATABASE
+    # ========================================================
 
     ensure_tables()
 
+    # ========================================================
+    # SCRAPER RESULTS
+    # ========================================================
 
     all_results = []
 
+    # IMPORTANT:
+    #
+    # Stores the individual scraper results.
+    #
+    # Example:
+    #
+    # {
+    #     "Devpost": [...],
+    #     "lablab.ai": [...],
+    #     "DoraHacks": [...],
+    #     "Kaggle": [...]
+    # }
+
+    source_results = {}
+
+    # Sources that successfully returned usable results.
+
+    successful_sources = set()
+
+    # ========================================================
+    # RUN EVERY SCRAPER
+    # ========================================================
 
     for name, fn in SCRAPERS:
 
@@ -618,27 +855,143 @@ def main():
 
             results = fn()
 
+            # Safety: make sure the scraper returned a list.
+            if results is None:
+
+                results = []
+
+            if not isinstance(results, list):
+
+                print(
+                    f"  ⚠ {name} returned an invalid "
+                    f"result type: {type(results).__name__}"
+                )
+
+                results = []
+
             print(
                 f"  ✓ {len(results)} items"
             )
 
-            all_results.extend(results)
+            # ------------------------------------------------
+            # Store results by source.
+            # ------------------------------------------------
+
+            source_results[name] = results
+
+            # ------------------------------------------------
+            # IMPORTANT:
+            #
+            # An empty result is NOT considered successful.
+            #
+            # This prevents API failures from causing a
+            # source-wide purge.
+            # ------------------------------------------------
+
+            if results:
+
+                successful_sources.add(
+                    normalize_source(name)
+                )
+
+            else:
+
+                print(
+                    f"  ⚠ {name} returned 0 items — "
+                    f"existing records for this source "
+                    f"will NOT be purged"
+                )
+
+            # ------------------------------------------------
+            # Add to global collection.
+            # ------------------------------------------------
+
+            all_results.extend(
+                results
+            )
 
         except Exception as e:
+
+            # ------------------------------------------------
+            # CRITICAL:
+            #
+            # A scraper failure must NEVER cause its old
+            # database records to be deleted.
+            # ------------------------------------------------
 
             print(
                 f"  ✗ Error: {e}"
             )
 
+            print(
+                f"  ⚠ {name} failed — "
+                f"existing records for this source "
+                f"will NOT be purged"
+            )
+
+    # ========================================================
+    # TOTAL
+    # ========================================================
 
     print(
         f"\n[Total] "
         f"{len(all_results)} hackathons collected"
     )
 
+    # ========================================================
+    # SUCCESSFUL SOURCES
+    # ========================================================
+
+    print(
+        "\n[Successful sources]"
+    )
+
+    for source in sorted(
+        successful_sources
+    ):
+
+        print(
+            f"  ✓ {source}"
+        )
+
+    # ========================================================
+    # FAILED / EMPTY SOURCES
+    # ========================================================
+
+    all_source_names = {
+        normalize_source(name)
+        for name, _ in SCRAPERS
+    }
+
+    skipped_sources = (
+        all_source_names
+        - successful_sources
+    )
+
+    if skipped_sources:
+
+        print(
+            "\n[Protected sources]"
+        )
+
+        for source in sorted(
+            skipped_sources
+        ):
+
+            print(
+                f"  ⚠ {source} "
+                f"(existing records protected)"
+            )
+
+    # ========================================================
+    # EXISTING IDS
+    # ========================================================
 
     existing = get_existing_ids()
 
+    # ========================================================
+    # NEW HACKATHONS
+    # ========================================================
 
     new = [
         h
@@ -646,37 +999,49 @@ def main():
         if make_id(h) not in existing
     ]
 
-
     print(
         f"[New]   "
         f"{len(new)} unseen hackathons"
     )
 
+    # ========================================================
+    # SAVE / REFRESH
+    # ========================================================
 
-    # Save every scraper's results.
-    save_all(all_results)
+    save_all(
+        all_results
+    )
 
+    # ========================================================
+    # DEDUPLICATE
+    # ========================================================
 
-    # Remove only genuine duplicate rows.
     deduped = dedupe_by_url()
 
     if deduped:
 
         print(
             f"[Dedupe] Removed "
-            f"{deduped} orphaned duplicate(s) "
-            f"from URL-scheme changes"
+            f"{deduped} exact duplicate URL record(s)"
         )
 
+    # ========================================================
+    # SOURCE-AWARE PURGE
+    # ========================================================
 
-    # Source-aware purge.
-    purged = purge_ended()
+    purged = purge_ended(
+        successful_sources=successful_sources,
+        source_results=source_results
+    )
 
     print(
         f"[Purge] Removed "
-        f"{purged} ended hackathon(s)"
+        f"{purged} ended/stale hackathon(s)"
     )
 
+    # ========================================================
+    # NOTIFICATIONS
+    # ========================================================
 
     if new:
 
@@ -694,6 +1059,9 @@ def main():
             if s.get("fcm_token")
         ]
 
+        # ----------------------------------------------------
+        # EMAIL
+        # ----------------------------------------------------
 
         if emails:
 
@@ -707,6 +1075,9 @@ def main():
                 f"{len(emails)} subscriber(s)"
             )
 
+        # ----------------------------------------------------
+        # PUSH
+        # ----------------------------------------------------
 
         if tokens:
 
@@ -727,6 +1098,9 @@ def main():
             "no notifications sent"
         )
 
+    # ========================================================
+    # FINISHED
+    # ========================================================
 
     print(
         f"\nFinished: "
@@ -734,5 +1108,10 @@ def main():
     )
 
 
+# ============================================================
+# ENTRY POINT
+# ============================================================
+
 if __name__ == "__main__":
+
     main()
