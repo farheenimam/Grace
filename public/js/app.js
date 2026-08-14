@@ -6,8 +6,8 @@ const SUPABASE_KEY = 'sb_publishable_8CNYSi1HttCYCmOhJpJFQA_G7s4zTcM';
 const SUPABASE_HEADERS = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 
 const SOURCE_COLORS = {
-  'devpost':'#6EE7B7','dev.to':'#A78BFA','lablab.ai':'#60A5FA',
-  'mlh':'#F472B6','hackerearth':'#FBBF24','dorahacks':'#FB923C',
+  'devpost':'#6EE7B7','lablab.ai':'#60A5FA',
+  'mlh':'#F472B6','dorahacks':'#FB923C',
   'google developers':'#FB923C','kaggle':'#67E8F9',
 };
 
@@ -21,12 +21,8 @@ const MOCK_DATA = [
   {source:'lablab.ai',title:'Enterprise AI Agents Hackathon',description:'Build the next intelligent enterprise solution using agentic AI.',deadline:'2026-05-19',prize:'See event',status:'open',url:'https://lablab.ai/event'},
   {source:'Devpost',title:'AI Innovation Challenge 2026',description:'Build next-gen AI-powered applications worldwide.',deadline:'2026-06-15',prize:'$25,000',status:'open',url:'https://devpost.com/hackathons'},
   {source:'Devpost',title:'Web3 Blockchain Hackathon',description:'Build the decentralized future. Smart contracts and dApps.',deadline:'2026-08-01',prize:'$50,000',status:'upcoming',url:'https://devpost.com/hackathons'},
-  {source:'dev.to',title:'DEV + Netlify Build Challenge',description:'Deploy a creative web app on Netlify and win prizes.',deadline:'2026-05-10',prize:'$5,000 + swag',status:'open',url:'https://dev.to'},
-  {source:'dev.to',title:'GitHub Game Off 2026',description:'Month-long game jam. Build a web game on GitHub.',deadline:'2026-12-01',prize:'Recognition',status:'upcoming',url:'https://dev.to'},
   {source:'MLH',title:'HackMIT 2026',description:'MIT annual hackathon. 1000+ hackers, 36 hours.',deadline:'2026-09-15',prize:'MLH prizes',status:'upcoming',url:'https://mlh.io'},
   {source:'MLH',title:'HackHarvard 2026',description:'Harvard hackathon open to all college students.',deadline:'2026-10-12',prize:'MLH prizes',status:'upcoming',url:'https://mlh.io'},
-  {source:'HackerEarth',title:'Smart India Hackathon 2026',description:'National-level hackathon solving real government problems.',deadline:'2026-08-15',prize:'$15,000',status:'open',url:'https://hackerearth.com'},
-  {source:'HackerEarth',title:'CodeSprint AI Edition',description:'48-hour sprint with AI, ML, NLP and CV challenges.',deadline:'2026-05-25',prize:'$8,000',status:'open',url:'https://hackerearth.com'},
   {source:'DoraHacks',title:'Solana Renaissance Hackathon',description:'4 weeks to ship a Web3 product or AI agent on Solana.',deadline:'2026-06-01',prize:'$50,000 USDC',status:'open',url:'https://dorahacks.io'},
   {source:'Google Developers',title:'GDSC Solution Challenge 2026',description:'Solve real-world UN SDG problems using Google tech.',deadline:'April 2026',prize:'Trip to Google HQ',status:'open',url:'https://developers.google.com'},
   {source:'Google Developers',title:'Google Code Jam 2026',description:'Algorithmic programming competition by Google.',deadline:'TBD',prize:'$15,000',status:'open',url:'https://codingcompetitions.withgoogle.com'},
@@ -41,8 +37,8 @@ let state = {
   activeFilter: 'all',
   search: '',
   toggles: JSON.parse(localStorage.getItem('ht_toggles')||'null') || {
-    'lablab.ai':true,'Devpost':true,'dev.to':true,
-    'MLH':true,'HackerEarth':true,'DoraHacks':true,'Google Developers':true,'Kaggle':true
+    'lablab.ai':true,'Devpost':true,
+    'MLH':true,'DoraHacks':true,'Google Developers':true,'Kaggle':true
   },
 };
 
@@ -89,11 +85,7 @@ async function fetchHackathons() {
     const params = new URLSearchParams({
       select: 'source,title,url,deadline,prize,thumbnail,description,status,first_seen',
       order: 'first_seen.desc',
-      // Limit is intentionally generous. dev.to's constant stream of brand-new
-      // article URLs keeps inserting fresh first_seen rows every run, which
-      // was pushing older-but-still-active Devpost/lablab.ai hackathons out
-      // of a smaller window before source-tab filtering even runs client-side.
-      limit: '2000',
+      limit: '200',
     });
     const res = await fetch(`${SUPABASE_URL}/rest/v1/hackathons?${params}`, {
       headers: SUPABASE_HEADERS, signal: AbortSignal.timeout(8000)
@@ -232,9 +224,7 @@ function renderSidebarFilters() {
     {label:'All',val:'all',color:'#6EE7B7'},
     {label:'lablab.ai',val:'lablab',color:'#60A5FA'},
     {label:'Devpost',val:'devpost',color:'#6EE7B7'},
-    {label:'dev.to',val:'devto',color:'#A78BFA'},
     {label:'MLH',val:'mlh',color:'#F472B6'},
-    {label:'HackerEarth',val:'he',color:'#FBBF24'},
     {label:'DoraHacks',val:'dora',color:'#FB923C'},
     {label:'Google Dev',val:'google',color:'#FB923C'},
     {label:'Kaggle',val:'kaggle',color:'#67E8F9'},
@@ -258,8 +248,7 @@ function renderSidebarFilters() {
 function renderSettings() {
   const SRCS = [
     {label:'lablab.ai',color:'#60A5FA'},{label:'Devpost',color:'#6EE7B7'},
-    {label:'dev.to',color:'#A78BFA'},{label:'MLH',color:'#F472B6'},
-    {label:'HackerEarth',color:'#FBBF24'},{label:'DoraHacks',color:'#FB923C'},
+    {label:'MLH',color:'#F472B6'},{label:'DoraHacks',color:'#FB923C'},
     {label:'Google Developers',color:'#FB923C'},{label:'Kaggle',color:'#67E8F9'},
   ];
   document.getElementById('sourceToggles').innerHTML = SRCS.map((s,i)=>`
