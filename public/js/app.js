@@ -89,7 +89,11 @@ async function fetchHackathons() {
     const params = new URLSearchParams({
       select: 'source,title,url,deadline,prize,thumbnail,description,status,first_seen',
       order: 'first_seen.desc',
-      limit: '200',
+      // Limit is intentionally generous. dev.to's constant stream of brand-new
+      // article URLs keeps inserting fresh first_seen rows every run, which
+      // was pushing older-but-still-active Devpost/lablab.ai hackathons out
+      // of a smaller window before source-tab filtering even runs client-side.
+      limit: '2000',
     });
     const res = await fetch(`${SUPABASE_URL}/rest/v1/hackathons?${params}`, {
       headers: SUPABASE_HEADERS, signal: AbortSignal.timeout(8000)
