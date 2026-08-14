@@ -432,21 +432,29 @@ def purge_ended(
     # --------------------------------------------------------
 
     current_ids_by_source = {}
-
     for source, results in source_results.items():
 
-        normalized_source = normalize_source(
-            source
+    normalized_source = normalize_source(
+        source
+    )
+
+    print(f"  ✓ {len(results)} items")
+
+    for h in results:
+        print(
+            f"      - {h.get('title', 'Untitled')} "
+            f"| deadline={h.get('deadline', 'TBD')} "
+            f"| status={h.get('status', 'unknown')} "
+            f"| {h.get('url', '')}"
         )
 
-        current_ids_by_source[
-            normalized_source
-        ] = {print(f"  ✓ {len(results)} items" )
-            make_id(h)
-            for h in results
-            if h.get("url")
-            or h.get("title")
-        }
+    current_ids_by_source[
+        normalized_source
+    ] = {
+        make_id(h)
+        for h in results
+        if h.get("url") or h.get("title")
+    }
 
     # --------------------------------------------------------
     # Database
