@@ -1,7 +1,7 @@
 {
   "name": "HackTracker",
   "short_name": "HackTracker",
-  "description": "Live feed of hackathons from Devpost, lablab.ai, MLH, dev.to and more",
+  "description": "Live feed of hackathons from Devpost, lablab.ai, MLH and more",
   "start_url": ".",
   "display": "standalone",
   "orientation": "portrait-primary",
