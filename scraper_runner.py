@@ -26,10 +26,8 @@ sys.path.insert(0, os.path.dirname(__file__))
 # ============================================================
 
 from scrapers.devpost_scraper import scrape_devpost
-from scrapers.devto_scraper import scrape_devto
 from scrapers.lablab_scraper import scrape_lablab
 from scrapers.mlh_scraper import scrape_mlh
-from scrapers.hackerearth_scraper import scrape_hackerearth
 from scrapers.dorahacks_scraper import scrape_dorahacks
 from scrapers.google_dev_scraper import scrape_google_dev_events
 from scrapers.kaggle_scraper import scrape_kaggle
@@ -49,10 +47,8 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
 SCRAPERS = [
     ("Devpost", scrape_devpost),
-    ("dev.to", scrape_devto),
     ("lablab.ai", scrape_lablab),
     ("MLH", scrape_mlh),
-    ("HackerEarth", scrape_hackerearth),
     ("DoraHacks", scrape_dorahacks),
     ("Google Dev", scrape_google_dev_events),
     ("Kaggle", scrape_kaggle),
@@ -318,9 +314,6 @@ def normalize_source(source):
     aliases = {
         "devpost": "devpost",
 
-        "dev.to": "dev.to",
-        "devto": "dev.to",
-
         "lablab.ai": "lablab.ai",
         "lablab": "lablab.ai",
 
@@ -330,8 +323,6 @@ def normalize_source(source):
         "kaggle": "kaggle",
 
         "mlh": "mlh",
-
-        "hackerearth": "hackerearth",
 
         "google dev": "google dev",
         "google developers": "google dev",
@@ -538,37 +529,6 @@ def purge_ended(
 
                 print(
                     "[Purge] Kaggle | "
-                    f"{title} | "
-                    f"deadline={deadline} | "
-                    f"status={status} | "
-                    f"{url}"
-                )
-
-            continue
-
-        # ====================================================
-        # DEV.TO
-        # ====================================================
-
-        if source_name == "dev.to":
-
-            if "dev.to" not in successful_sources:
-                continue
-
-            if not deadline:
-                continue
-
-            if str(deadline).strip().upper() in ("TBD", "N/A"):
-                continue
-
-            dt = parse_deadline(deadline)
-
-            if dt and dt < cutoff:
-
-                to_delete.append(rid)
-
-                print(
-                    "[Purge] dev.to | "
                     f"{title} | "
                     f"deadline={deadline} | "
                     f"status={status} | "
