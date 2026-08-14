@@ -203,62 +203,34 @@ def normalize_source(source):
 # ============================================================
 
 def handle_hackathons(params):
-
     if not SUPABASE_URL:
-
         return respond({
             "count": 0,
             "hackathons": [],
-            "error": (
-                "SUPABASE_URL "
-                "not configured"
-            )
+            "error": "SUPABASE_URL not configured"
         })
 
-
     try:
+        # --------------------------------------------------
+        # Get requested limit
+        # --------------------------------------------------
 
-        # ----------------------------------------------------
-        # LIMIT
-        # ----------------------------------------------------
+        requested_limit = params.get("limit", "1000")
 
-        limit = int(
-            params.get(
-                "limit",
-                1000
-            )
-        )
+        try:
+            limit = int(requested_limit)
+        except (ValueError, TypeError):
+            limit = 1000
 
-        # Maximum 5000 per request.
-        limit = max(
-            1,
-            min(limit, 5000)
-        )
+        # Database currently has 588+ records.
+        # Allow enough room for ALL sources.
+        limit = max(1, min(limit, 2000))
 
-
-        # ----------------------------------------------------
-        # OFFSET
-        # ----------------------------------------------------
-
-        offset = int(
-            params.get(
-                "offset",
-                0
-            )
-        )
-
-        offset = max(
-            0,
-            offset
-        )
-
-
-        # ----------------------------------------------------
-        # QUERY
-        # ----------------------------------------------------
+        # --------------------------------------------------
+        # Base query
+        # --------------------------------------------------
 
         sb_params = {
-
             "select": (
                 "id,"
                 "source,"
@@ -272,98 +244,95 @@ def handle_hackathons(params):
                 "first_seen"
             ),
 
-            "order": (
-                "first_seen.desc"
-            ),
+            # Newest records first.
+            "order": "first_seen.desc",
 
-            "limit": str(
-                limit
-            ),
-
-            "offset": str(
-                offset
-            ),
+            "limit": str(limit),
         }
 
-
-        # ----------------------------------------------------
+        # --------------------------------------------------
         # SOURCE FILTER
-        # ----------------------------------------------------
+        # --------------------------------------------------
 
-        if params.get("source"):
+        source = params.get("source")
 
-            source = normalize_source(
-                params["source"]
-            )
+        if source:
+            source = source.strip()
 
-            sb_params["source"] = (
-                f"eq.{source}"
-            )
+            # Exact case-insensitive source match.
+            sb_params["source"] = f"ilike.{source}"
 
-
-        # ----------------------------------------------------
+        # --------------------------------------------------
         # STATUS FILTER
-        # ----------------------------------------------------
+        # --------------------------------------------------
 
-        if params.get("status"):
+        status = params.get("status")
 
-            sb_params["status"] = (
-                f"eq.{params['status']}"
-            )
+        if status:
+            status = status.strip().lower()
+            sb_params["status"] = f"eq.{status}"
 
-
-        # ----------------------------------------------------
-        # FETCH
-        # ----------------------------------------------------
+        # --------------------------------------------------
+        # Fetch
+        # --------------------------------------------------
 
         rows = sb_get(
             "hackathons",
             sb_params
         )
 
+        # --------------------------------------------------
+        # Safety: never return None
+        # --------------------------------------------------
 
-        # ----------------------------------------------------
-        # RESPONSE
-        # ----------------------------------------------------
+        if not isinstance(rows, list):
+            rows = []
+
+        # --------------------------------------------------
+        # Debug source counts
+        # --------------------------------------------------
+
+        source_counts = {}
+
+        for row in rows:
+            source_name = row.get(
+                "source",
+                "unknown"
+            )
+
+            source_counts[source_name] = (
+                source_counts.get(source_name, 0) + 1
+            )
+
+        print(
+            "[API] Returned "
+            f"{len(rows)} hackathons"
+        )
+
+        print(
+            "[API] Sources: "
+            f"{source_counts}"
+        )
 
         return respond({
-
             "count": len(rows),
-
             "hackathons": rows,
-
-            "offset": offset,
-
-            "limit": limit,
-
-            "has_more": (
-                len(rows) == limit
-            ),
-
+            "by_source": source_counts
         })
-
 
     except Exception as e:
 
         print(
-            f"[Hackathons API] Error: {e}"
+            f"[API] Hackathon query failed: {e}"
         )
 
         return respond({
-
             "count": 0,
-
             "hackathons": [],
-
+            "by_source": {},
             "error": str(e)
-
-        }, 500)
-
-
-# ============================================================
-# STATS
-# ============================================================
-
+        })
+        
 def handle_stats():
 
     if not SUPABASE_URL:
@@ -433,29 +402,17 @@ def handle_stats():
 # ============================================================
 
 def handle_sources():
-
     return respond({
-
         "sources": [
-
             "Devpost",
-
             "dev.to",
-
             "lablab.ai",
-
             "MLH",
-
             "HackerEarth",
-
             "DoraHacks",
-
             "Google Dev",
-
-            "Kaggle",
-
+            "Kaggle"
         ]
-
     })
 
 
