@@ -136,16 +136,54 @@ function toggleSave(hackathon) {
 }
 
 function getFiltered() {
+  const sourceMap = {
+    all: null,
+    lablab: 'lablab.ai',
+    devpost: 'Devpost',
+    mlh: 'MLH',
+    dora: 'DoraHacks',
+    google: 'Google Dev',
+    kaggle: 'Kaggle',
+  };
+
   return state.hackathons.filter(h => {
+
+    // ------------------------------------------
+    // SOURCE FILTER
+    // ------------------------------------------
+
     if (state.activeFilter !== 'all') {
-      const src = (h.source||'').toLowerCase().replace(/[\s.]/g,'');
-      const f = state.activeFilter;
-      if (!src.includes(f) && !f.includes(src.slice(0,4))) return false;
+
+      const expectedSource =
+        sourceMap[state.activeFilter];
+
+      if (h.source !== expectedSource) {
+        return false;
+      }
     }
+
+    // ------------------------------------------
+    // SEARCH
+    // ------------------------------------------
+
     if (state.search) {
-      const q = state.search.toLowerCase();
-      if (!`${h.title} ${h.description||''} ${h.source}`.toLowerCase().includes(q)) return false;
+
+      const q =
+        state.search
+          .toLowerCase()
+          .trim();
+
+      const searchable = `
+        ${h.title || ''}
+        ${h.description || ''}
+        ${h.source || ''}
+      `.toLowerCase();
+
+      if (!searchable.includes(q)) {
+        return false;
+      }
     }
+
     return true;
   });
 }
