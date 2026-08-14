@@ -60,22 +60,62 @@ def handle_health():
 
 def handle_hackathons(params):
     if not SUPABASE_URL:
-        return respond({"count": 0, "hackathons": [], "error": "SUPABASE_URL not configured"})
+        return respond({
+            "count": 0,
+            "hackathons": [],
+            "error": "SUPABASE_URL not configured"
+        })
+
     try:
-        limit = min(int(params.get("limit", 100)), 500)
+        limit = min(
+            int(params.get("limit", 500)),
+            500
+        )
+
+        offset = max(
+            int(params.get("offset", 0)),
+            0
+        )
+
         sb_params = {
-            "select": "source,title,url,deadline,prize,thumbnail,description,status,first_seen",
+            "select": (
+                "source,title,url,deadline,prize,"
+                "thumbnail,description,status,first_seen"
+            ),
             "order": "first_seen.desc",
             "limit": str(limit),
+            "offset": str(offset),
         }
+
         if params.get("source"):
-            sb_params["source"] = f"ilike.{params['source']}"
+            sb_params["source"] = (
+                f"ilike.{params['source']}"
+            )
+
         if params.get("status"):
-            sb_params["status"] = f"eq.{params['status']}"
-        rows = sb_get("hackathons", sb_params)
-        return respond({"count": len(rows), "hackathons": rows})
+            sb_params["status"] = (
+                f"eq.{params['status']}"
+            )
+
+        rows = sb_get(
+            "hackathons",
+            sb_params
+        )
+
+        return respond({
+            "count": len(rows),
+            "offset": offset,
+            "limit": limit,
+            "hackathons": rows
+        })
+
     except Exception as e:
-        return respond({"count": 0, "hackathons": [], "error": str(e)})
+
+        return respond({
+            "count": 0,
+            "hackathons": [],
+            "error": str(e)
+        })
 
 
 def handle_stats():
