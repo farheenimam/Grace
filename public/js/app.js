@@ -82,17 +82,28 @@ async function requestNotificationPermission() {
 // Data
 async function fetchHackathons() {
   try {
+    const PAGE_SIZE = 1000;
     const params = new URLSearchParams({
       select: 'source,title,url,deadline,prize,thumbnail,description,status,first_seen',
       order: 'first_seen.desc',
-      limit: '2000',
     });
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/hackathons?${params}`, {
-      headers: SUPABASE_HEADERS, signal: AbortSignal.timeout(8000)
-    });
-    if (!res.ok) throw new Error();
-    const data = await res.json();
-    if (data.length > 0) return data;
+    let all = [];
+    let offset = 0;
+    while (true) {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/hackathons?${params}`, {
+        headers: {
+          ...SUPABASE_HEADERS,
+          Range: `${offset}-${offset + PAGE_SIZE - 1}`,
+        },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!res.ok) throw new Error();
+      const batch = await res.json();
+      all = all.concat(batch);
+      if (batch.length < PAGE_SIZE) break;
+      offset += PAGE_SIZE;
+    }
+    if (all.length > 0) return all;
     throw new Error('empty');
   } catch {
     console.log('[Supabase] Using mock data');
@@ -136,54 +147,16 @@ function toggleSave(hackathon) {
 }
 
 function getFiltered() {
-  const sourceMap = {
-    all: null,
-    lablab: 'lablab.ai',
-    devpost: 'Devpost',
-    mlh: 'MLH',
-    dora: 'DoraHacks',
-    google: 'Google Dev',
-    kaggle: 'Kaggle',
-  };
-
   return state.hackathons.filter(h => {
-
-    // ------------------------------------------
-    // SOURCE FILTER
-    // ------------------------------------------
-
     if (state.activeFilter !== 'all') {
-
-      const expectedSource =
-        sourceMap[state.activeFilter];
-
-      if (h.source !== expectedSource) {
-        return false;
-      }
+      const src = (h.source||'').toLowerCase().replace(/[\s.]/g,'');
+      const f = state.activeFilter;
+      if (!src.includes(f) && !f.includes(src.slice(0,4))) return false;
     }
-
-    // ------------------------------------------
-    // SEARCH
-    // ------------------------------------------
-
     if (state.search) {
-
-      const q =
-        state.search
-          .toLowerCase()
-          .trim();
-
-      const searchable = `
-        ${h.title || ''}
-        ${h.description || ''}
-        ${h.source || ''}
-      `.toLowerCase();
-
-      if (!searchable.includes(q)) {
-        return false;
-      }
+      const q = state.search.toLowerCase();
+      if (!`${h.title} ${h.description||''} ${h.source}`.toLowerCase().includes(q)) return false;
     }
-
     return true;
   });
 }
@@ -258,93 +231,29 @@ function renderStatsBar() {
 }
 
 function renderSidebarFilters() {
-
   const FILTERS = [
-    {
-      label: 'All',
-      val: 'all',
-      source: null,
-      color: '#6EE7B7'
-    },
-    {
-      label: 'lablab.ai',
-      val: 'lablab',
-      source: 'lablab.ai',
-      color: '#60A5FA'
-    },
-    {
-      label: 'Devpost',
-      val: 'devpost',
-      source: 'Devpost',
-      color: '#6EE7B7'
-    },
-    {
-      label: 'MLH',
-      val: 'mlh',
-      source: 'MLH',
-      color: '#F472B6'
-    },
-    {
-      label: 'DoraHacks',
-      val: 'dora',
-      source: 'DoraHacks',
-      color: '#FB923C'
-    },
-    {
-      label: 'Google Dev',
-      val: 'google',
-      source: 'Google Dev',
-      color: '#FB923C'
-    },
-    {
-      label: 'Kaggle',
-      val: 'kaggle',
-      source: 'Kaggle',
-      color: '#67E8F9'
-    },
+    {label:'All',val:'all',color:'#6EE7B7'},
+    {label:'lablab.ai',val:'lablab',color:'#60A5FA'},
+    {label:'Devpost',val:'devpost',color:'#6EE7B7'},
+    {label:'MLH',val:'mlh',color:'#F472B6'},
+    {label:'DoraHacks',val:'dora',color:'#FB923C'},
+    {label:'Google Dev',val:'google',color:'#FB923C'},
+    {label:'Kaggle',val:'kaggle',color:'#67E8F9'},
   ];
-
-  const counts = {
-    all: state.hackathons.length
-  };
-
-  FILTERS.forEach(f => {
-    if (f.val !== 'all') {
-      counts[f.val] =
-        state.hackathons.filter(
-          h => h.source === f.source
-        ).length;
-    }
+  const counts = {};
+  state.hackathons.forEach(h => {
+    const src = (h.source||'').toLowerCase();
+    FILTERS.forEach(f => {
+      if (f.val!=='all' && (src.includes(f.val.slice(0,4))||f.val.includes(src.slice(0,4)))) counts[f.val]=(counts[f.val]||0)+1;
+    });
+    counts.all = (counts.all||0)+1;
   });
-
-  document.getElementById(
-    'sidebarFilters'
-  ).innerHTML = FILTERS.map(f => `
-
-    <div
-      class="filter-item${state.activeFilter === f.val ? ' active' : ''}"
-      onclick="setFilter('${f.val}')"
-      style="${
-        state.activeFilter === f.val
-          ? `color:${f.color}`
-          : ''
-      }"
-    >
-
-      <div
-        class="filter-dot"
-        style="background:${f.color}"
-      ></div>
-
-      ${f.label}
-
-      <span class="filter-count">
-        ${counts[f.val] || 0}
-      </span>
-
-    </div>
-
-  `).join('');
+  document.getElementById('sidebarFilters').innerHTML = FILTERS.map(f=>`
+    <div class="filter-item${state.activeFilter===f.val?' active':''}" onclick="setFilter('${f.val}')"
+      style="${state.activeFilter===f.val?`color:${f.color}`:''}">
+      <div class="filter-dot" style="background:${f.color}"></div>
+      ${f.label}<span class="filter-count">${counts[f.val]||0}</span>
+    </div>`).join('');
 }
 
 function renderSettings() {
