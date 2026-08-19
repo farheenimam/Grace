@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>HackTracker — Live Hackathon Feed</title>
+  <title>Grace — Hub for Hackathons</title>
   <meta name="description" content="Live feed of hackathons from Devpost, lablab.ai, MLH, DoraHacks and Google Developers." />
   <meta name="theme-color" content="#0A0A0F" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="HackTracker" />
+  <meta name="apple-mobile-web-app-title" content="Grace" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon-192.png" />
@@ -23,8 +23,11 @@
   <!-- Mobile topbar -->
   <header class="topbar">
     <div class="topbar-logo">
-      <div class="logo-mark">H</div>
-      <span class="logo-text">HackTracker</span>
+      <img class="logo-mark" src="img/logo-mark.png" alt="Grace" />
+      <div class="logo-name">
+        <span class="logo-text">Grace</span>
+        <span class="logo-tagline">Hub for hackathons</span>
+      </div>
     </div>
     <div class="live-badge">
       <div class="live-dot"></div>
@@ -35,8 +38,11 @@
   <!-- Desktop sidebar -->
   <nav class="sidebar">
     <div class="sidebar-logo">
-      <div class="logo-mark">H</div>
-      <span class="logo-text">HackTracker</span>
+      <img class="logo-mark" src="img/logo-mark.png" alt="Grace" />
+      <div class="logo-name">
+        <span class="logo-text">Grace</span>
+        <span class="logo-tagline">Hub for hackathons</span>
+      </div>
       <div class="live-badge" style="margin-left:auto">
         <div class="live-dot"></div>
         <span class="live-text">LIVE</span>
@@ -128,7 +134,7 @@
         </div>
         <div class="settings-section">
           <div class="settings-label">INSTALL APP</div>
-          <div class="settings-desc">Install HackTracker to your home screen. Works offline too.</div>
+          <div class="settings-desc">Install Grace to your home screen. Works offline too.</div>
           <button class="install-btn" style="width:100%" onclick="triggerInstall()">⬇ Add to Home Screen</button>
         </div>
         <div class="settings-section">
@@ -161,7 +167,7 @@
 
 <!-- Install prompt -->
 <div class="install-prompt" id="installPrompt">
-  <div class="install-prompt-title">Install HackTracker</div>
+  <div class="install-prompt-title">Install Grace</div>
   <div class="install-prompt-text">Add to your home screen for instant notifications and offline access — no app store needed.</div>
   <div class="install-prompt-actions">
     <button class="install-prompt-yes" onclick="triggerInstall()">Install</button>
