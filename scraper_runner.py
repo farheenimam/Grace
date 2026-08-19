@@ -418,6 +418,20 @@ def purge_ended(
     # PROCESS EACH DATABASE ROW
     # ========================================================
 
+    # Sources whose current scrape result is the source of truth: if a
+    # previously-seen item isn't returned this run, treat it as ended.
+    # (Their "status" field is scraper-hardcoded, not site-authoritative,
+    # so it can't be used to gate a deadline-based purge.)
+    DIFF_PURGE_SOURCES = {"devpost", "lablab.ai", "dorahacks", "mlh", "google dev"}
+
+    DIFF_PURGE_LABELS = {
+        "devpost": "Devpost",
+        "lablab.ai": "lablab.ai",
+        "dorahacks": "DoraHacks",
+        "mlh": "MLH",
+        "google dev": "Google Dev",
+    }
+
     for (
         rid,
         source,
@@ -431,89 +445,9 @@ def purge_ended(
             source
         )
 
-        current_status = (
-            str(status or "")
-            .strip()
-            .lower()
-        )
-
         # ====================================================
-        # DEVPOST
-        # ====================================================
-
-        if source_name == "devpost":
-
-            if "devpost" not in successful_sources:
-                continue
-
-            current_ids = current_ids_by_source.get(
-                "devpost",
-                set()
-            )
-
-            if rid not in current_ids:
-
-                to_delete.append(rid)
-
-                print(
-                    "[Purge] Devpost no longer returned | "
-                    f"{title} | {url}"
-                )
-
-            continue
-
-        # ====================================================
-        # LABLAB.AI
-        # ====================================================
-
-        if source_name == "lablab.ai":
-
-            if "lablab.ai" not in successful_sources:
-                continue
-
-            current_ids = current_ids_by_source.get(
-                "lablab.ai",
-                set()
-            )
-
-            if rid not in current_ids:
-
-                to_delete.append(rid)
-
-                print(
-                    "[Purge] lablab.ai no longer returned | "
-                    f"{title} | {url}"
-                )
-
-            continue
-
-        # ====================================================
-        # DORAHACKS
-        # ====================================================
-
-        if source_name == "dorahacks":
-
-            if "dorahacks" not in successful_sources:
-                continue
-
-            current_ids = current_ids_by_source.get(
-                "dorahacks",
-                set()
-            )
-
-            if rid not in current_ids:
-
-                to_delete.append(rid)
-
-                print(
-                    "[Purge] DoraHacks no longer returned | "
-                    f"{title} | {url}"
-                )
-
-            continue
-
-        # ====================================================
-        # KAGGLE
+        # KAGGLE — deadline field is real API data, safe to
+        # purge purely by date.
         # ====================================================
 
         if source_name == "kaggle":
@@ -538,28 +472,35 @@ def purge_ended(
             continue
 
         # ====================================================
-        # ALL OTHER SOURCES
+        # DIFF-PURGE SOURCES
         # ====================================================
 
-        if source_name not in successful_sources:
-            continue
+        if source_name in DIFF_PURGE_SOURCES:
 
-        if current_status in ("open", "upcoming", "active", "live"):
-            continue
+            if source_name not in successful_sources:
+                continue
 
-        dt = parse_deadline(deadline)
-
-        if dt and dt < cutoff:
-
-            to_delete.append(rid)
-
-            print(
-                f"[Purge] {source} | "
-                f"{title} | "
-                f"deadline={deadline} | "
-                f"status={status} | "
-                f"{url}"
+            current_ids = current_ids_by_source.get(
+                source_name,
+                set()
             )
+
+            if rid not in current_ids:
+
+                to_delete.append(rid)
+
+                label = DIFF_PURGE_LABELS.get(source_name, source)
+
+                print(
+                    f"[Purge] {label} no longer returned | "
+                    f"{title} | {url}"
+                )
+
+            continue
+
+        # ====================================================
+        # UNRECOGNIZED SOURCE — leave untouched
+        # ====================================================
 
     # ========================================================
     # DELETE
