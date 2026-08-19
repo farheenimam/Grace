@@ -201,9 +201,8 @@ function skeletons() {
   </div>`).join('');
 }
 
-const FEED_PAGE_SIZE = 24;
-let feedRenderedCount = 0;
-let feedScrollObserver = null;
+const FEED_PAGE_SIZE = 50;
+let feedPage = 1;
 
 function renderFeed(reset = true) {
   const filtered = getFiltered();
@@ -212,36 +211,60 @@ function renderFeed(reset = true) {
   document.getElementById('feedCount').textContent =
     `${filtered.length} hackathon${filtered.length!==1?'s':''} · updated just now`;
 
-  if (reset) { feedRenderedCount = 0; grid.innerHTML = ''; }
+  if (reset) feedPage = 1;
 
   if (!filtered.length) {
     grid.innerHTML = `<div class="empty"><div class="empty-icon">◈</div><div class="empty-title">No hackathons found</div><div class="empty-sub">${state.search?'Try a different search term':'Pull to refresh or check back later'}</div></div>`;
+    renderFeedPagination(0, 0);
     return;
   }
 
-  const next = filtered.slice(feedRenderedCount, feedRenderedCount + FEED_PAGE_SIZE);
-  grid.insertAdjacentHTML('beforeend', next.map((h,i)=>cardHTML(h, feedRenderedCount+i)).join(''));
-  feedRenderedCount += next.length;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / FEED_PAGE_SIZE));
+  if (feedPage > totalPages) feedPage = totalPages;
 
-  attachFeedSentinel(filtered.length);
+  const start = (feedPage - 1) * FEED_PAGE_SIZE;
+  const pageItems = filtered.slice(start, start + FEED_PAGE_SIZE);
+  grid.innerHTML = pageItems.map((h,i)=>cardHTML(h, start+i)).join('');
+
+  renderFeedPagination(feedPage, totalPages);
 }
 
-function attachFeedSentinel(total) {
-  let sentinel = document.getElementById('feedSentinel');
-  if (!sentinel) {
-    sentinel = document.createElement('div');
-    sentinel.id = 'feedSentinel';
-    document.getElementById('feedGrid').insertAdjacentElement('afterend', sentinel);
+function renderFeedPagination(page, totalPages) {
+  let bar = document.getElementById('feedPagination');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'feedPagination';
+    bar.className = 'pagination';
+    document.getElementById('feedGrid').insertAdjacentElement('afterend', bar);
   }
-  if (feedScrollObserver) feedScrollObserver.disconnect();
-  if (feedRenderedCount >= total) return;
-  feedScrollObserver = new IntersectionObserver(entries => {
-    if (entries[0].isIntersecting) {
-      feedScrollObserver.disconnect();
-      renderFeed(false);
-    }
+  if (totalPages <= 1) { bar.innerHTML = ''; return; }
+
+  // Build page number list with ellipsis for large ranges
+  const nums = [];
+  const add = n => nums.push(n);
+  add(1);
+  for (let p = page - 1; p <= page + 1; p++) if (p > 1 && p < totalPages) add(p);
+  add(totalPages);
+  const uniq = [...new Set(nums)].sort((a,b)=>a-b);
+
+  let html = `<button class="page-btn page-nav" ${page<=1?'disabled':''} onclick="goToFeedPage(${page-1})" aria-label="Previous page">‹</button>`;
+  let prev = 0;
+  uniq.forEach(n => {
+    if (prev && n - prev > 1) html += `<span class="page-ellipsis">…</span>`;
+    html += `<button class="page-btn${n===page?' active':''}" onclick="goToFeedPage(${n})">${n}</button>`;
+    prev = n;
   });
-  feedScrollObserver.observe(sentinel);
+  html += `<button class="page-btn page-nav" ${page>=totalPages?'disabled':''} onclick="goToFeedPage(${page+1})" aria-label="Next page">›</button>`;
+  bar.innerHTML = html;
+}
+
+function goToFeedPage(n) {
+  const filtered = getFiltered();
+  const totalPages = Math.max(1, Math.ceil(filtered.length / FEED_PAGE_SIZE));
+  if (n < 1 || n > totalPages || n === feedPage) return;
+  feedPage = n;
+  renderFeed(false);
+  document.getElementById('page-feed').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function renderSaved() {
