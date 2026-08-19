@@ -1,9 +1,9 @@
-# HackTracker
+# Grace
 
 A full-stack hackathon aggregator PWA. Scrapes multiple hackathon platforms, stores results in a Postgres database, and notifies users when new hackathons are announced.
 
-**Live:** https://sparkling-caramel-f4396e.netlify.app or https://farheenimam.github.io/hacktracker/
-**Repo:** https://github.com/farheenimam/hacktracker
+**Live:** https://sparkling-caramel-f4396e.netlify.app or https://farheenimam.github.io/grace/
+**Repo:** https://github.com/farheenimam/grace
 
 ---
 
@@ -69,8 +69,8 @@ Frontend PWA ──► fetch + render ──► service worker cache (offline)
 
 **1. Clone**
 ```bash
-git clone https://github.com/farheenimam/hacktracker.git
-cd hacktracker
+git clone https://github.com/farheenimam/Grace.git
+cd Grace
 ```
 
 **2. Install deps**
@@ -96,7 +96,7 @@ Push to `main` — Netlify auto-builds frontend and functions. GitHub Actions ha
 ## Project structure
 
 ```
-hacktracker/
+Grace/
 ├── netlify/
 │   └── functions/
 │       └── api.py          # serverless API, native Python handler
