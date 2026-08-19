@@ -201,15 +201,47 @@ function skeletons() {
   </div>`).join('');
 }
 
-function renderFeed() {
+const FEED_PAGE_SIZE = 24;
+let feedRenderedCount = 0;
+let feedScrollObserver = null;
+
+function renderFeed(reset = true) {
   const filtered = getFiltered();
   _forSave = filtered;
   const grid = document.getElementById('feedGrid');
   document.getElementById('feedCount').textContent =
     `${filtered.length} hackathon${filtered.length!==1?'s':''} · updated just now`;
-  grid.innerHTML = filtered.length
-    ? filtered.map((h,i)=>cardHTML(h,i)).join('')
-    : `<div class="empty"><div class="empty-icon">◈</div><div class="empty-title">No hackathons found</div><div class="empty-sub">${state.search?'Try a different search term':'Pull to refresh or check back later'}</div></div>`;
+
+  if (reset) { feedRenderedCount = 0; grid.innerHTML = ''; }
+
+  if (!filtered.length) {
+    grid.innerHTML = `<div class="empty"><div class="empty-icon">◈</div><div class="empty-title">No hackathons found</div><div class="empty-sub">${state.search?'Try a different search term':'Pull to refresh or check back later'}</div></div>`;
+    return;
+  }
+
+  const next = filtered.slice(feedRenderedCount, feedRenderedCount + FEED_PAGE_SIZE);
+  grid.insertAdjacentHTML('beforeend', next.map((h,i)=>cardHTML(h, feedRenderedCount+i)).join(''));
+  feedRenderedCount += next.length;
+
+  attachFeedSentinel(filtered.length);
+}
+
+function attachFeedSentinel(total) {
+  let sentinel = document.getElementById('feedSentinel');
+  if (!sentinel) {
+    sentinel = document.createElement('div');
+    sentinel.id = 'feedSentinel';
+    document.getElementById('feedGrid').insertAdjacentElement('afterend', sentinel);
+  }
+  if (feedScrollObserver) feedScrollObserver.disconnect();
+  if (feedRenderedCount >= total) return;
+  feedScrollObserver = new IntersectionObserver(entries => {
+    if (entries[0].isIntersecting) {
+      feedScrollObserver.disconnect();
+      renderFeed(false);
+    }
+  });
+  feedScrollObserver.observe(sentinel);
 }
 
 function renderSaved() {
