@@ -2,8 +2,8 @@
 
 A full-stack hackathon aggregator PWA. Scrapes multiple hackathon platforms, stores results in a Postgres database, and notifies users when new hackathons are announced.
 
-**Live:** https://sparkling-caramel-f4396e.netlify.app or https://farheenimam.github.io/grace/
-**Repo:** https://github.com/farheenimam/grace
+**Live:** https://sparkling-caramel-f4396e.netlify.app or https://farheenimam.github.io/Grace/
+**Repo:** https://github.com/farheenimam/Grace
 
 ---
 
